@@ -1,7 +1,5 @@
 #!/usr/bin/env ruby
-#
 
-#
 USAGE = <<-EOF
 columnize.rb
 
@@ -14,12 +12,12 @@ examples:
   $ pbpaste | columnize.rb col_name,col_name_2,col_name_3 | pbcopy
 EOF
 
-max_widths = []
-lines = []
 input = ''
+lines = []
+max_widths = []
 
 # nonblocking read means we can tell if stdin is empty
-# otherwise called the program with no input would just hang
+# otherwise calling the program with no input would just hang
 loop do
   begin
     input += $stdin.read_nonblock(4096)
