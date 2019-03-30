@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+
+require 'logger'
+require_relative '../lib/sql_formatter'
+input = ''
+
+log = Logger.new($stderr)
+log.level = ENV['DEBUG'] ? Logger::DEBUG : Logger::WARN
+
+# nonblocking read means we can tell if stdin is empty
+# otherwise calling the program with no input would just hang
+loop do
+  begin
+    input += $stdin.read_nonblock(4096)
+  rescue IO::EAGAINWaitReadable, EOFError
+    break
+  end
+end
+
+formatter = SqlFormatter.new(logger: log)
+puts formatter.format(input)
