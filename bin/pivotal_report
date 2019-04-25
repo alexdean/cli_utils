@@ -80,15 +80,14 @@ data.each do |item|
   next if skip
 
   item['labels'].each do |label|
+    parts = label['name'].split(':')
     name = label['name']
     if epic_ids.include?(label['id'])
       type = 'epic'
-    elsif label['name'] =~ /^stakeholder:/
-      name = label['name']['stakeholder:'.size..-1]
-      type = 'stakeholder'
-    elsif label['name'] =~ /^app:/
-      name = label['name']['app:'.size..-1]
-      type = 'app'
+    # group labels like 'app:foo' or 'system:bar'
+    elsif parts.size > 1
+      type = parts[0].strip
+      name = parts[1..-1].join(':').strip
     else
       type = 'label'
     end
