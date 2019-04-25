@@ -1,0 +1,162 @@
+#!/usr/bin/env ruby
+
+# fetch stories based on an 'accepted' date range
+# summarize number of stories and number of points per label
+# separate epic labels from non-epic labels
+
+require 'net/http'
+require 'json'
+require 'optparse'
+require 'set'
+require 'date'
+require 'time'
+
+project_id = ENV['PIVOTAL_TRACKER_PROJECT_ID']
+token = ENV['PIVOTAL_TRACKER_API_TOKEN']
+
+options = {}
+OptionParser.new do |parser|
+  parser.accept(Time) do |input|
+    Time.parse(input)
+  end
+
+  parser.on("-w", "--weeks NUM", Integer, "Number of weeks to report on.") do |o|
+    options[:week_count] = o
+  end
+
+  parser.on("-b", "--begin [DATE]", Time, "Date to begin.") do |o|
+    options[:begin_at] = o
+  end
+
+  parser.on("-e", "--end [DATE]", Time, "Date to end.") do |o|
+    options[:end_at] = o
+  end
+end.parse!
+
+if options[:begin_at] && options[:end_at]
+  begin_at = options[:begin_at]
+  end_at = options[:end_at]
+else
+  # figure out date range of most-recently-completed N weeks. (based on options.)
+  week_count = options[:week_count] || 1
+
+  d = Date.today
+  previous_sunday = d - d.wday
+  end_at = previous_sunday.to_time.utc
+  begin_at = (previous_sunday - (7 * week_count)).to_time.utc
+end
+
+def get_json(url, token)
+  uri = URI.parse(url)
+
+  req = Net::HTTP::Get.new(uri)
+  req['X-TrackerToken'] = token
+  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
+    http.request(req)
+  end
+
+  JSON.parse(response.body)
+end
+
+# fetch epics, build set of label ids which are epics
+# https://www.pivotaltracker.com/services/v5/projects/$PROJECT_ID/epics
+epic_ids = Set.new
+data = get_json("https://www.pivotaltracker.com/services/v5/projects/#{project_id}/epics", token)
+data.each do |item|
+  epic_ids << item['label']['id']
+end
+
+# key: label id
+# value: hash. keys name, features, chores, bugs, points
+summary = {}
+totals = {'name' => 'TOTALS', 'features' => 0, 'bugs' => 0, 'chores' => 0, 'points' => 0}
+max_name_length = 0
+
+url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/stories?accepted_after=#{begin_at.iso8601}&accepted_before=#{end_at.iso8601}"
+data = get_json(url, token)
+data.each do |item|
+  label_names = item['labels'].map{ |i| i['name']}
+  skip = (label_names & %w[duplicate canceled cancelled]).size > 0
+  next if skip
+
+  item['labels'].each do |label|
+    name = label['name']
+    if epic_ids.include?(label['id'])
+      type = 'epic'
+    elsif label['name'] =~ /^stakeholder:/
+      name = label['name']['stakeholder:'.size..-1]
+      type = 'stakeholder'
+    elsif label['name'] =~ /^app:/
+      name = label['name']['app:'.size..-1]
+      type = 'app'
+    else
+      type = 'label'
+    end
+
+    summary[label['id']] ||= {
+      'name' => '',
+      'features' => 0,
+      'bugs' => 0,
+      'chores' => 0,
+      'points' => 0,
+      'type' => type
+    }
+    summary_item = summary[label['id']]
+    summary_item['name'] = name
+    case item['story_type']
+    when 'feature'
+      then summary_item['features'] += 1
+    when 'bug'
+      then summary_item['bugs'] += 1
+    when 'chore'
+      then summary_item['chores'] += 1
+    end
+
+    summary_item['points'] += item['estimate'].to_i
+    max_name_length = [max_name_length, label['name'].size].max
+  end
+
+  case item['story_type']
+  when 'feature'
+    then totals['features'] += 1
+  when 'bug'
+    then totals['bugs'] += 1
+  when 'chore'
+    then totals['chores'] += 1
+  end
+
+  totals['points'] += item['estimate'].to_i
+end
+
+# sort by is_epic, then by label
+# print new header row after is_epic changes
+summary = summary
+  .sort_by { |id, item| "#{item['type']} #{item['name'].to_s}" }
+  .to_h
+
+puts "#{begin_at.to_date} - #{end_at.to_date}"
+
+def header_row(max_name_length)
+  ' ' * max_name_length + " points features bugs chores"
+end
+
+def data_row(item, max_name_length)
+  "#{item['name'].ljust(max_name_length)} #{item['points'].to_s.rjust(6)} #{item['features'].to_s.rjust(8)} #{item['bugs'].to_s.rjust(4)} #{item['chores'].to_s.rjust(6)}"
+end
+
+prev_type = nil
+summary.each do |id, item|
+  current_type = item['type']
+  if current_type != prev_type
+    puts
+    puts current_type.upcase + 'S'
+    puts header_row(max_name_length)
+  end
+  puts data_row(item, max_name_length)
+  prev_type = current_type
+end
+
+puts
+# puts 'TOTALS'
+puts header_row(max_name_length)
+puts data_row(totals, max_name_length)
