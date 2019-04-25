@@ -1,8 +1,6 @@
 #!/usr/bin/env ruby
 
 USAGE = <<-EOF
-columnize.rb
-
 accept tsv on stdin and build fixed-width columns (for gisting)
 optionally, supply column names as a csv string to include them in the output
 
