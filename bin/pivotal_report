@@ -10,6 +10,7 @@ require 'optparse'
 require 'set'
 require 'date'
 require 'time'
+# require 'byebug'
 
 project_id = ENV['PIVOTAL_TRACKER_PROJECT_ID']
 token = ENV['PIVOTAL_TRACKER_API_TOKEN']
@@ -58,26 +59,11 @@ def get_json(url, token)
   JSON.parse(response.body)
 end
 
-# fetch epics, build set of label ids which are epics
-# https://www.pivotaltracker.com/services/v5/projects/$PROJECT_ID/epics
-epic_ids = Set.new
-data = get_json("https://www.pivotaltracker.com/services/v5/projects/#{project_id}/epics", token)
-data.each do |item|
-  epic_ids << item['label']['id']
-end
-
-# key: label id
-# value: hash. keys name, features, chores, bugs, points
-summary = {}
-totals = {'name' => 'TOTALS', 'features' => 0, 'bugs' => 0, 'chores' => 0, 'points' => 0}
-max_name_length = 0
-
-url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/stories?accepted_after=#{begin_at.iso8601}&accepted_before=#{end_at.iso8601}"
-data = get_json(url, token)
-data.each do |item|
+# add a single story's data to the summary and totals hashes.
+def add_data_item(item, summary, totals, epic_ids, max_name_length)
   label_names = item['labels'].map{ |i| i['name']}
   skip = (label_names & %w[duplicate canceled cancelled]).size > 0
-  next if skip
+  return max_name_length if skip
 
   item['labels'].each do |label|
     parts = label['name'].split(':')
@@ -125,6 +111,52 @@ data.each do |item|
   end
 
   totals['points'] += item['estimate'].to_i
+
+  max_name_length
+end
+
+# access a PT api url and yield the found data items.
+#
+# navigates across paged data sets and yields all items across all pages.
+def consume_paginated_url(base_url, token, items_per_page: 100)
+  limit = items_per_page
+  offset = 0
+  loop do
+    paginated_url = "#{base_url}&limit=#{limit}&offset=#{offset}&envelope=true"
+
+    data = get_json(paginated_url, token)
+    data['data'].each do |item|
+      yield item
+    end
+
+    if data['pagination'] && (data['pagination']['returned'] == data['pagination']['limit'])
+      offset += limit
+    else
+      break
+    end
+  end
+end
+
+# fetch epics, build set of label ids which are epics
+# https://www.pivotaltracker.com/services/v5/projects/$PROJECT_ID/epics
+#
+# response is not paginated, and adding pagination params raises an error.
+# https://www.pivotaltracker.com/help/api/rest/v5#Epics
+epic_ids = Set.new
+url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/epics"
+get_json(url, token).each do |item|
+  epic_ids << item['label']['id']
+end
+
+# key: label id
+# value: hash. keys name, features, chores, bugs, points
+summary = {}
+totals = {'name' => 'TOTALS', 'features' => 0, 'bugs' => 0, 'chores' => 0, 'points' => 0}
+max_name_length = 0
+
+url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/stories?accepted_after=#{begin_at.iso8601}&accepted_before=#{end_at.iso8601}"
+consume_paginated_url(url, token) do |item|
+  max_name_length = add_data_item(item, summary, totals, epic_ids, max_name_length)
 end
 
 # sort by is_epic, then by label
