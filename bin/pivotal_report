@@ -35,14 +35,14 @@ OptionParser.new do |parser|
     options[:end_at] = o
   end
 
-  parser.on("-s", "--sort COLUMN", "Which column to sort by. Valid options: #{sortable_columns.inspect}") do |o|
+  parser.on("-s", "--sort COLUMN", "Which column to sort by. Valid options: #{sortable_columns.join(', ')}") do |o|
     options[:sort] = o
   end
 
 end.parse!
 
 if !sortable_columns.include?(options[:sort])
-  puts "invalid sort value '#{options[:sort]}' given. Use one of: #{sortable_columns.inspect}"
+  puts "Invalid sort value '#{options[:sort]}' given. Use one of: #{sortable_columns.join(', ')}"
   exit 1
 end
 
