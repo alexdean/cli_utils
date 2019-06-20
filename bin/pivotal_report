@@ -15,7 +15,9 @@ require 'time'
 project_id = ENV['PIVOTAL_TRACKER_PROJECT_ID']
 token = ENV['PIVOTAL_TRACKER_API_TOKEN']
 
-options = {}
+sortable_columns = ['name', 'points', 'features', 'bugs', 'chores']
+
+options = { sort: 'name' }
 OptionParser.new do |parser|
   parser.accept(Time) do |input|
     Time.parse(input)
@@ -32,7 +34,17 @@ OptionParser.new do |parser|
   parser.on("-e", "--end [DATE]", Time, "Date to end.") do |o|
     options[:end_at] = o
   end
+
+  parser.on("-s", "--sort COLUMN", "Which column to sort by. Valid options: #{sortable_columns.inspect}") do |o|
+    options[:sort] = o
+  end
+
 end.parse!
+
+if !sortable_columns.include?(options[:sort])
+  puts "invalid sort value '#{options[:sort]}' given. Use one of: #{sortable_columns.inspect}"
+  exit 1
+end
 
 if options[:begin_at] && options[:end_at]
   begin_at = options[:begin_at]
@@ -159,10 +171,10 @@ consume_paginated_url(url, token) do |item|
   max_name_length = add_data_item(item, summary, totals, epic_ids, max_name_length)
 end
 
-# sort by is_epic, then by label
+# sort by is_epic, then by user-specified column.
 # print new header row after is_epic changes
 summary = summary
-  .sort_by { |id, item| "#{item['type']} #{item['name'].to_s}" }
+  .sort_by { |id, item| "#{item['type']} #{item[options[:sort]].to_s}" }
   .to_h
 
 puts "#{begin_at.to_date} - #{end_at.to_date}"
