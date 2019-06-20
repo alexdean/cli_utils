@@ -64,8 +64,13 @@ def get_json(url, token)
 
   req = Net::HTTP::Get.new(uri)
   req['X-TrackerToken'] = token
-  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
-    http.request(req)
+  begin
+    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
+      http.request(req)
+    end
+  rescue => e
+    puts "Error communicating with Pivotal Tracker API. #{e.message}"
+    exit 1
   end
 
   JSON.parse(response.body)
