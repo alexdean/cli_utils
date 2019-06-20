@@ -77,22 +77,24 @@ def get_json(url, token)
 end
 
 # add a single story's data to the summary and totals hashes.
-def add_data_item(item, summary, totals, epic_ids, max_name_length)
+def add_data_item(item, summary, totals, epics, max_name_length)
   label_names = item['labels'].map{ |i| i['name']}
   skip = (label_names & %w[duplicate canceled cancelled]).size > 0
   return max_name_length if skip
 
   item['labels'].each do |label|
     parts = label['name'].split(':')
-    name = label['name']
-    if epic_ids.include?(label['id'])
+    epic = epics[label['id']]
+    if epic
       type = 'epic'
+      name = epic['name']
     # group labels like 'app:foo' or 'system:bar'
     elsif parts.size > 1
       type = parts[0].strip
       name = parts[1..-1].join(':').strip
     else
       type = 'label'
+      name = label['name']
     end
 
     summary[label['id']] ||= {
@@ -115,7 +117,7 @@ def add_data_item(item, summary, totals, epic_ids, max_name_length)
     end
 
     summary_item['points'] += item['estimate'].to_i
-    max_name_length = [max_name_length, label['name'].size].max
+    max_name_length = [max_name_length, name.size].max
   end
 
   case item['story_type']
@@ -159,10 +161,11 @@ end
 #
 # response is not paginated, and adding pagination params raises an error.
 # https://www.pivotaltracker.com/help/api/rest/v5#Epics
-epic_ids = Set.new
+# epic_ids = Set.new
 url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/epics"
+epics = {}
 get_json(url, token).each do |item|
-  epic_ids << item['label']['id']
+  epics[item['label']['id']] = item
 end
 
 # key: label id
@@ -173,7 +176,7 @@ max_name_length = 0
 
 url = "https://www.pivotaltracker.com/services/v5/projects/#{project_id}/stories?accepted_after=#{begin_at.iso8601}&accepted_before=#{end_at.iso8601}"
 consume_paginated_url(url, token) do |item|
-  max_name_length = add_data_item(item, summary, totals, epic_ids, max_name_length)
+  max_name_length = add_data_item(item, summary, totals, epics, max_name_length)
 end
 
 # sort by is_epic, then by user-specified column.
