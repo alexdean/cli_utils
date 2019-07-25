@@ -1,0 +1,169 @@
+#!/usr/bin/env ruby
+
+# Monitor ships in the Duluth/Superior harbor. Alert when they start moving.
+#
+# using data from https://harborlookout.com
+#
+# usage:
+#
+#   1. pick ships you want to watch via https://harborlookout.com
+#   2. note the ships' IMO numbers.
+#   3. start this script using those IMO numbers.
+#
+#   Script will re-check current data every 60 seconds and note when the ship
+#   moves from its original position (indicating that it is departing). Then
+#   grab your keys and head for Canal Park!
+#
+# examples:
+#
+#   $ ship_alert --imo 5025691
+#   I, [2019-07-25T09:32:37.224312 #80230]  INFO -- : start
+#   I, [2019-07-25T09:32:37.555256 #80230]  INFO -- : watching ARTHUR M ANDERSON. imo:5025691, position:(-92.087692, 46.736118)
+#
+#   $ ruby ship_alert.rb --imos 5025691,7514684
+#   I, [2019-07-25T09:33:59.345472 #80321]  INFO -- : start
+#   I, [2019-07-25T09:33:59.641348 #80321]  INFO -- : watching ARTHUR M ANDERSON. imo:5025691, position:(-92.087692, 46.736118)
+#   I, [2019-07-25T09:33:59.659287 #80321]  INFO -- : watching WALTER J MCCARTHY. imo:7514684, position:(-92.115189, 46.742851)
+
+# imo numbers of ships to watch.
+imos = []
+
+require 'net/http'
+require 'json'
+require 'logger'
+require 'optparse'
+
+opt_parser = OptionParser.new do |parser|
+  parser.banner = <<~EOF
+  Watch for ship movement using data from harborlookout.com.
+
+  Examples:
+  $ #{__FILE__} --imo 1234567
+  $ #{__FILE__} --imos 1234567,2345678
+
+  EOF
+
+  parser.on("-i", "--imos IMOS", "CSV list of ship IMO numbers to watch.") do |o|
+    imos = o.split(',').map(&:strip).map(&:to_i)
+  end
+end
+opt_parser.parse!
+
+if imos.empty?
+  puts opt_parser
+  exit
+end
+
+log = Logger.new($stdout)
+log.level = Logger::INFO
+
+log.info 'start'
+uri = URI('https://arielmobile.azurewebsites.net/v1.0/ships/index')
+origins = []
+
+def fetch_data(uri, log)
+  log.debug 'updating data'
+  req = Net::HTTP::Get.new(uri)
+  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
+    begin
+      http.request(req)
+    rescue Errno::ETIMEDOUT
+      log.error "timeout refreshing data."
+      sleep 5
+      retry
+    end
+  end
+  JSON.parse(response.body)
+end
+
+def dist(current, previous)
+  delta_lat = (current['latitude'] - previous['latitude']).abs
+  delta_lon = (current['longitude'] - previous['longitude']).abs
+  Math.sqrt(delta_lat ** 2 + delta_lon ** 2)
+end
+
+loop do
+  data = fetch_data(uri, log)
+  data.each do |ship|
+    if imos.include?(ship['imo'])
+      imo = ship['imo']
+      current = ship['shipHistory'][0]
+
+      # record original position of ship.
+      if origins[imo].nil?
+        log.info "watching #{ship['name']}. imo:#{ship['imo']}, position:(#{current['longitude'].round(6)}, #{current['latitude'].round(6)})"
+        origins[imo] = {}
+        origins[imo]['latitude'] = current['latitude']
+        origins[imo]['longitude'] = current['longitude']
+      end
+
+      dist_moved = dist(current, origins[imo])
+
+      # threshold in degrees. how far does it move before we alert?
+      # can't be too tight or we get false positives
+      if dist_moved > 0.002
+      # if current['speed'] > 0
+        log.info "\a#{ship['name']}." \
+          " position:(#{current['longitude'].round(6)}, #{current['latitude'].round(6)})," \
+          " spd:#{current['speed']}," \
+          " dist_moved:#{'%.6f' % dist_moved }," \
+          " dist_to_canal:#{current['canalDistance']}"
+      end
+    end
+  end
+
+  sleep 60
+end
+
+# JSON response looks like
+#
+# [
+#   {
+#     "id": 764,
+#     "mostRecentShipHistoryGuid": "dd53ba20-17a0-4320-837e-e7401b9ed6ac",
+#     "imo": 5025691,
+#     "mmsi": 366972020,
+#     "name": "ARTHUR M ANDERSON",
+#     "callSign": "WDG7087",
+#     "flag": "us",
+#     "type": 70,
+#     "yearBuilt": 1952,
+#     "length": 234,
+#     "width": 22,
+#     "draught": 8.8,
+#     "created": "2016-03-22T15:12:22.45Z",
+#     "modified": "2019-07-25T14:26:26.537Z",
+#     "imageUrl": null,
+#     "shipHistory": [
+#       {
+#         "id": 72363324,
+#         "shipId": 764,
+#         "shipHistoryGuid": "dd53ba20-17a0-4320-837e-e7401b9ed6ac",
+#         "destination": "Duluth, MN",
+#         "navigationStatus": 5,
+#         "cargo": "Empty",
+#         "latitude": 46.73612976074219,
+#         "longitude": -92.08769989013672,
+#         "heading": null,
+#         "speed": 0.1,
+#         "canalDistance": 2.61423683,
+#         "canalEntryTimestamp": "2019-07-23T06:44:25.873Z",
+#         "canalExitTimestamp": null,
+#         "lastPositionTimestamp": "2019-07-25T14:23:43Z",
+#         "eta": "2019-07-25T21:00:00Z",
+#         "isEtaUncertain": false,
+#         "isEtaManuallyEntered": true,
+#         "derivedEta": "2019-07-25T21:00:00Z",
+#         "isDerivedEtaUncertain": false,
+#         "created": "2019-07-25T14:26:26.67Z",
+#         "modified": "2019-07-25T14:26:26.67Z",
+#         "removed": false,
+#         "modifiedBy": "Administrator",
+#         "antennaDistance": 2.89507914,
+#         "locationOverride": null
+#       }
+#     ],
+#     "hasTypeException": false,
+#     "pronunciation": null
+#   }
+# ]
