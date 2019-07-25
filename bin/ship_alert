@@ -64,6 +64,7 @@ origins = []
 def fetch_data(uri, log)
   log.debug 'updating data'
   req = Net::HTTP::Get.new(uri)
+  req['User-Agent'] = "ship_alert/1.0 (see https://github.com/alexdean/cli_utils/blob/master/bin/ship_alert)"
   response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
     begin
       http.request(req)
