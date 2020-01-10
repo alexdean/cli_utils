@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+   <title>Repositories (33) all builds</title>
+   <link rel="alternate" type="text/html" href="https://jenkins.example.com/job/random_squad/" />
+   <updated>2020-01-09T23:53:00Z</updated>
+   <author>
+      <name>Jenkins Server</name>
+   </author>
+   <id>urn:uuid:903deee0-7bfa-11db-9fe1-0800200c9a66</id>
+   <entry>
+      <title>tools squad » project_a » branch_a #910 (broken since build #891)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_a/job/branch_a/910/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_a/branch_a:910</id>
+      <published>2020-01-09T23:53:00Z</published>
+      <updated>2020-01-09T23:53:00Z</updated>
+      <content>Failures: ruby-version is EOL, bundle install</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_b » master #5190 (stable)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_b/job/master/5190/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_b/master:5190</id>
+      <published>2020-01-09T23:36:29Z</published>
+      <updated>2020-01-09T23:36:29Z</updated>
+      <content>Success</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_c » regexp_partials #171 (broken for a long time)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_c/job/regexp_partials/171/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_c/regexp_partials:171</id>
+      <published>2020-01-09T23:24:00Z</published>
+      <updated>2020-01-09T23:24:00Z</updated>
+      <content>Failures: rspec</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_c » master #1038 (broken since build #1030)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_c/job/master/1038/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_c/master:1038</id>
+      <published>2020-01-09T23:17:00Z</published>
+      <updated>2020-01-09T23:17:00Z</updated>
+      <content>Failures: rspec</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_b » master #5189 (stable)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_b/job/master/5189/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_b/master:5189</id>
+      <published>2020-01-09T22:53:13Z</published>
+      <updated>2020-01-09T22:53:13Z</updated>
+      <content>Success</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_d » master #1176 (stable)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_d/job/master/1176/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_d/master:1176</id>
+      <published>2020-01-09T22:50:00Z</published>
+      <updated>2020-01-09T22:50:00Z</updated>
+      <content>Success</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_e » master #852 (aborted)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_e/job/master/852/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_e/master:852</id>
+      <published>2020-01-09T22:20:00Z</published>
+      <updated>2020-01-09T22:20:00Z</updated>
+      <content>Failures: other</content>
+   </entry>
+   <entry>
+      <title>tools squad » project_b » master #5188 (stable)</title>
+      <link rel="alternate" type="text/html" href="https://jenkins.ted.com/job/random_squad/job/project_b/job/master/5188/" />
+      <id>tag:hudson.dev.java.net,2020:random_squad/project_b/master:5188</id>
+      <published>2020-01-09T22:19:18Z</published>
+      <updated>2020-01-09T22:19:18Z</updated>
+      <content>Success</content>
+   </entry>
+</feed>
+

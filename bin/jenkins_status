@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+require 'bundler/inline'
+gemfile do
+  source 'https://rubygems.org'
+  gem 'nokogiri'
+  gem 'terminal-table'
+end
+
+require 'nokogiri'
+require 'open-uri'
+require 'optparse'
+require 'pathname'
+require 'terminal-table'
+require 'time'
+
+require_relative '../lib/jenkins_status/feed'
+
+options = {}
+
+opt_parser = OptionParser.new do |parser|
+  parser.banner = "Consume a Jenkins build status RSS feed and report on the contents.\n\n" \
+                  "Usage: #{File.basename(__FILE__)} [options]\n\n"
+
+  parser.on("-f", "--feed PATH", String, "Local path or URL to a jenkins RSS feed.") do |o|
+    options[:path] = o
+  end
+
+  parser.on("-a", "--auth USER:PASSWORD", String, "Basic auth credentials to use when accessing the feed.") do |o|
+    options[:auth] = o
+  end
+end
+opt_parser.parse!
+
+if !options[:path]
+  puts opt_parser
+  exit 1
+end
+
+root_dir = Pathname.new(File.expand_path('../..', __FILE__))
+
+open_options = {}
+if options[:auth]
+  open_options[:http_basic_authentication] = options[:auth].split(':')
+end
+
+feed = open(options[:path], open_options)
+
+puts JenkinsStatus::Feed.new(feed).report
