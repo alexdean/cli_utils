@@ -1,0 +1,107 @@
+#!/usr/bin/env ruby
+
+require 'time'
+require 'tzinfo'
+require 'logger'
+# require 'pry'
+
+# tz 15:00 UTC in EDT
+
+# 2-letter tz ids will be mapped to something that TZInfo understands
+# others are passed to TZInfo as-is.
+id_map = {
+           'PT' => 'America/Los_Angeles',
+           'MT' => 'America/Denver',
+           'CT' => 'America/Chicago',
+           'ET' => 'America/New_York'
+         }
+
+usage = <<~EOF
+## usage
+
+  tz <time> <source_tz> in <destination_tz>
+
+## example
+
+  tz 15:00 UTC in ET
+
+this converts 15:00 UTC into US Eastern time.
+
+## zones
+
+Standard timezone identifiers like 'America/Chicago' or 'Europe/Berlin' are
+understood, as are the following shortcuts:
+
+#{id_map.map { |k, v| "  * #{k}: #{v}"}.join("\n") }
+EOF
+
+if ARGV.size == 0
+  puts usage
+  exit 0
+end
+
+begin
+  version = Gem::Version.new(TZInfo::VERSION)
+
+  if version.segments[0] < 2
+    puts "Update tzinfo gem to at least 2.0.0."
+    exit 1
+  end
+rescue NameError => e
+  puts "TZInfo::VERSION not defined. Update tzinfo gem."
+  exit 1
+end
+
+input = ARGV.join(' ')
+
+_, time_input, source_tz_input, dest_tz_input = input.match(/^(.+) ([\w\/]+) in ([\w\/]+)$/).to_a
+# debug: time_spec.inspect
+
+# TODO: support `tz now in TZ`
+
+begin
+  if source_tz_input.to_s.size == 2
+    mapped = id_map.fetch(source_tz_input)
+  else
+    mapped = source_tz_input
+  end
+
+  source_tz = TZInfo::Timezone.get(mapped)
+rescue TZInfo::InvalidTimezoneIdentifier => e
+  puts "source TZ '#{source_tz_input}' not recognized."
+  exit 1
+end
+
+begin
+  if dest_tz_input.to_s.size == 2
+    mapped = id_map.fetch(dest_tz_input)
+  else
+    mapped = dest_tz_input
+  end
+
+  dest_tz = TZInfo::Timezone.get(mapped)
+rescue TZInfo::InvalidTimezoneIdentifier => e
+  puts "destination TZ '#{dest_tz_input}' not recognized."
+  exit 1
+end
+
+begin
+  source_time = Time.parse(time_input)
+rescue ArgumentError => e
+  puts "Can't parse '#{time_spec}'."
+  exit 1
+end
+
+# the zone info in the built-in time object are not reliable here
+# need to use TZInfo-provided info.
+utc_time = source_tz.local_to_utc(source_time)
+dest_period = dest_tz.period_for_utc(utc_time)
+
+dest_time = dest_tz.to_local(utc_time)
+
+format_str = '%Y-%m-%d %H:%M:%S %Z (%z)'
+
+puts 'source: ' + source_tz.to_local(utc_time).strftime(format_str)
+puts '  dest: ' + dest_tz.to_local(utc_time).strftime(format_str)
+
+# puts TZInfo::Timezone.all_identifiers.inspect
