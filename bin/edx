@@ -1,0 +1,85 @@
+#!/usr/bin/env ruby
+
+segment_id = ARGV[0]
+position = ARGV[1]
+codes = ARGV[2..]
+
+if !segment_id
+  puts "edx -- the EDI explainer"
+  puts "usage: edx <segment> <position> <codes>"
+  puts
+  puts "examples:"
+  puts "  edx AT7          -- describe all elements in the AT7 segment"
+  puts "  edx AT7 07       -- describe element AT707"
+  puts "  edx AT7 07 all   -- describe element AT707 and include all code values"
+  puts "  edx AT7 07 UT LT -- describe element AT707 and include values for codes 'UT' and 'LT'"
+  exit
+end
+
+require 'bundler/inline'
+
+gemfile do
+  source 'https://rubygems.org'
+  gem 'stupidedi', '~> 1.4.1'
+end
+
+begin
+  segment_def = Stupidedi::Versions::FortyTen::SegmentDefs.const_get(segment_id.to_sym)
+rescue NameError => e
+  puts "No such segment #{segment_id}"
+  puts "Check https://github.com/irobayna/stupidedi/tree/master/lib/stupidedi/versions/004010/segment_defs"
+  exit 1
+end
+
+definition = segment_def
+
+def element_type(element_uses)
+  element_uses.definition.class.to_s.split('::').last
+end
+
+# @param [String] segment_id 'LX', 'AT7', etc
+# @param [String, Integer] position Index of position to report on. Begins at 1 not 0.
+# @param [Stupidedi::Schema::SimpleElementUse]
+# @return [String]
+def report_element(segment_id, position, element_uses)
+  element_def = element_uses.definition
+
+  length_spec =  + '..' + element_def.max_length.to_s
+  "#{(segment_id + position.to_s.rjust(2, '0')).ljust(7)} " \
+    "#{element_uses.id.to_s.ljust(5)} " \
+    "#{element_def.min_length.to_s.rjust(3)} " \
+    "#{element_def.max_length.to_s.rjust(3)} " \
+    "#{element_type(element_uses).rjust(4)} " \
+    "#{element_def.name}"
+end
+
+puts "#{segment_id} #{definition.purpose}"
+puts
+puts "Element Def   Min Max Type Description"
+
+if position
+  # convert 1-indexed to 0-indexed
+  element_uses = definition.element_uses[position.to_i - 1]
+  element_def = element_uses.definition
+
+  puts report_element(segment_id, position, element_uses)
+
+  if codes && element_type(element_uses) == 'ID' # only ID types have code lists
+    stupidedi_code_list = element_def.code_list.instance_variable_get(:@hash)
+
+    puts
+    if codes[0] == 'all'
+      codes = stupidedi_code_list.keys
+    end
+
+    codes.sort.each do |code|
+      description = stupidedi_code_list[code] || 'Not Found'
+      puts "       #{code.rjust(3)}: #{description}"
+    end
+  end
+else
+  definition.element_uses.each_with_index do |element_uses, idx|
+    position = idx + 1
+    puts report_element(segment_id, position, element_uses)
+  end
+end
