@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 
-# try to find local branches which have a corresponding log entry in master
-# (indicating that the branch has been merged.)
+# try to find local branches which have a corresponding log entry in a target
+# branch (ie: master, main, etc), which indicates that the branch has been merged
+# and could be deleted.
 
 # `prefix` is:
 #
@@ -9,12 +10,17 @@
 #   2. the prefix of a ticket name which will appear in git logs
 prefix = ENV['PREFIX'] || 'ITS'
 
+target_branch = ENV['TARGET'] || 'master'
+
 current_branch = `git symbolic-ref --short HEAD`.strip
-if current_branch != 'master'
+if current_branch != target_branch
   puts "current branch: #{current_branch}"
-  puts 'checkout master branch before using this script.'
+  puts "checkout #{target_branch} branch before using this script."
   exit
 end
+
+puts "checking branches starting with '#{prefix}' against target branch '#{target_branch}'."
+puts "set PREFIX or TARGET to change these."
 
 branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
 branches.each do |branch_name|
@@ -34,7 +40,7 @@ branches.each do |branch_name|
   puts
   if found
 
-    puts '  Found in master logs.'
+    puts "  Found in #{target_branch} logs."
     puts
     puts '  ' + logs.split("\n").join("\n  ")
     puts
@@ -53,7 +59,10 @@ branches.each do |branch_name|
 
     puts
   else
-    puts "  Not in master."
+    puts "  Not in #{target_branch}."
   end
 end
 
+if branches.size == 0
+  puts 'nothing to do.'
+end
