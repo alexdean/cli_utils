@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+
+# try to find local branches which have a corresponding log entry in master
+# (indicating that the branch has been merged.)
+
+# `prefix` is:
+#
+#   1. the initial characters of a branch name
+#   2. the prefix of a ticket name which will appear in git logs
+prefix = ENV['PREFIX'] || 'ITS'
+
+current_branch = `git symbolic-ref --short HEAD`.strip
+if current_branch != 'master'
+  puts "current branch: #{current_branch}"
+  puts 'checkout master branch before using this script.'
+  exit
+end
+
+branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
+branches.each do |branch_name|
+  matches = branch_name.match(/^(ITS-\d+)/i)
+  if !matches || !matches[1]
+    puts "branch name does not match: '#{branch_name}'"
+    next
+  end
+
+  jira = matches[1]
+
+  logs = `git log --grep #{jira.upcase} --grep #{jira.downcase}`.strip
+  found = !logs.empty?
+
+  puts
+  puts "#{branch_name}"
+  puts
+  if found
+
+    puts '  Found in master logs.'
+    puts
+    puts '  ' + logs.split("\n").join("\n  ")
+    puts
+    print "OK to remove #{branch_name}? (y/n) "
+    response = gets.to_s.strip
+
+    if response[0].downcase == 'y'
+      cmd = "git branch -D #{branch_name}"
+      puts
+      puts "  > " + cmd
+      output = `#{cmd}`.to_s.strip
+      puts "  " + output.split("\n").join("\n  ")
+    else
+      puts "  not removed"
+    end
+
+    puts
+  else
+    puts "  Not in master."
+  end
+end
+
