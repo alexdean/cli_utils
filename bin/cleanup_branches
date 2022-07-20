@@ -24,7 +24,7 @@ puts "set PREFIX or TARGET to change these."
 
 branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
 branches.each do |branch_name|
-  matches = branch_name.match(/^(ITS-\d+)/i)
+  matches = branch_name.match(/^(#{prefix}-\d+)/i)
   if !matches || !matches[1]
     puts "branch name does not match: '#{branch_name}'"
     next
