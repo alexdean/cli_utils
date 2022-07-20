@@ -10,12 +10,25 @@
 #   2. the prefix of a ticket name which will appear in git logs
 prefix = ENV['PREFIX'] || 'ITS'
 
-target_branch = ENV['TARGET'] || 'master'
+# try to figure out which is the main/master branch.
+def guess_target_branch
+  options = %w[master main]
+  option_str = options.map { |o| "--list '#{o}'" }.join(' ')
 
+  branches = `git branch #{option_str}`
+  branches
+  .gsub(/\*/, '') # get rid of indicator for 'currently selected branch'
+  .split
+  .map(&:strip)
+  .first
+end
+
+target_branch = ENV['TARGET'] || guess_target_branch
 current_branch = `git symbolic-ref --short HEAD`.strip
+
 if current_branch != target_branch
   puts "current branch: #{current_branch}"
-  puts "checkout #{target_branch} branch before using this script."
+  puts "checkout '#{target_branch}' branch before using this script."
   exit
 end
 
