@@ -8,7 +8,7 @@
 #
 #   1. the initial characters of a branch name
 #   2. the prefix of a ticket name which will appear in git logs
-prefix = ENV['PREFIX'] || 'ITS'
+prefix = ENV['PREFIX'] || 'IN,RRSU'
 
 # try to figure out which is the main/master branch.
 def guess_target_branch
@@ -23,6 +23,58 @@ def guess_target_branch
   .first
 end
 
+def check_target(prefix:, target_branch:)
+  puts
+  puts "checking branches starting with '#{prefix}' against target branch '#{target_branch}'."
+  puts "set PREFIX or TARGET to change these."
+
+  branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
+
+  if branches.size == 0
+    puts "nothing to do for prefix:#{prefix}."
+  end
+
+  branches.each do |branch_name|
+    matches = branch_name.match(/^(#{prefix}-\d+)/i)
+    if !matches || !matches[1]
+      puts "branch name does not match: '#{branch_name}'"
+      next
+    end
+
+    jira = matches[1]
+
+    logs = `git log --grep #{jira.upcase} --grep #{jira.downcase}`.strip
+    found = !logs.empty?
+
+    puts
+    puts "#{branch_name}"
+    puts
+    if found
+
+      puts "  Found in #{target_branch} logs."
+      puts
+      puts '  ' + logs.split("\n").join("\n  ")
+      puts
+      print "OK to remove #{branch_name}? (y/n) "
+      response = gets.to_s.strip
+
+      if response[0].downcase == 'y'
+        cmd = "git branch -D #{branch_name}"
+        puts
+        puts "  > " + cmd
+        output = `#{cmd}`.to_s.strip
+        puts "  " + output.split("\n").join("\n  ")
+      else
+        puts "  not removed"
+      end
+
+      puts
+    else
+      puts "  Not in #{target_branch}."
+    end
+  end
+end
+
 target_branch = ENV['TARGET'] || guess_target_branch
 current_branch = `git symbolic-ref --short HEAD`.strip
 
@@ -32,50 +84,7 @@ if current_branch != target_branch
   exit
 end
 
-puts "checking branches starting with '#{prefix}' against target branch '#{target_branch}'."
-puts "set PREFIX or TARGET to change these."
-
-branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
-branches.each do |branch_name|
-  matches = branch_name.match(/^(#{prefix}-\d+)/i)
-  if !matches || !matches[1]
-    puts "branch name does not match: '#{branch_name}'"
-    next
-  end
-
-  jira = matches[1]
-
-  logs = `git log --grep #{jira.upcase} --grep #{jira.downcase}`.strip
-  found = !logs.empty?
-
-  puts
-  puts "#{branch_name}"
-  puts
-  if found
-
-    puts "  Found in #{target_branch} logs."
-    puts
-    puts '  ' + logs.split("\n").join("\n  ")
-    puts
-    print "OK to remove #{branch_name}? (y/n) "
-    response = gets.to_s.strip
-
-    if response[0].downcase == 'y'
-      cmd = "git branch -D #{branch_name}"
-      puts
-      puts "  > " + cmd
-      output = `#{cmd}`.to_s.strip
-      puts "  " + output.split("\n").join("\n  ")
-    else
-      puts "  not removed"
-    end
-
-    puts
-  else
-    puts "  Not in #{target_branch}."
-  end
+prefix.split(',').map(&:strip).each do |p|
+  check_target(prefix: p, target_branch: target_branch)
 end
 
-if branches.size == 0
-  puts 'nothing to do.'
-end
