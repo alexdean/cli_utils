@@ -1,0 +1,107 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'logger'
+require 'pry'
+$log = Logger.new(STDOUT)
+$log.level = Logger::INFO
+
+# goal of this script is to narrow down a flakey test to two test files
+# use rspec --bisect from there
+# (rspec --bisect is too slow with large numbers of tests...)
+
+options = {
+  count: 12,
+  cause: 1,
+  victim: 12,
+  dir: 'spec'
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: generate-test-files --count 12 --cause 2 --victim 4"
+
+  opts.on("-v", "--[no-]verbose", "Run verbosely") do |o|
+    $log.level = Logger::DEBUG
+  end
+
+  opts.on("-c", "--count INTEGER", "number of test files to generate") do |o|
+    options[:count] = o.to_i
+  end
+
+  opts.on("-a", "--cause INTEGER", "which file pollutes the environment") do |o|
+    options[:cause] = o.to_i
+  end
+
+  opts.on("-i", "--victim INTEGER", "spec file which has flakey behavior") do |o|
+    options[:victim] = o.to_i
+  end
+
+  opts.on("-d", "--dir PATH", "where to write test files to") do |o|
+    options[:dir] = o
+  end
+end.parse!
+
+is_error = false
+if options[:cause] > options[:count]
+  puts "--cause cannot be greater than --count"
+  is_error = true  
+end
+
+if options[:victim] > options[:count]
+  puts "--victim cannot be greater than --count"
+  is_error = true
+end
+
+if !File.directory?(options[:dir])
+  puts "--dir must be a directory"
+  is_error = true
+end
+
+if is_error
+  exit 1
+end
+
+cause_idx = options[:cause] - 1
+victim_idx = options[:victim] - 1
+
+suite_name = '1'
+cause_file = ''
+victim_file = ''
+candidates = []
+options[:count].times do |i|
+  file_name = "#{options[:dir]}/#{suite_name}_spec.rb"
+
+  File.open(file_name, 'w') do |f|
+    f.puts "RSpec.describe '#{suite_name.upcase}' do"
+    if i == cause_idx
+      candidates << file_name
+      $log.info "writing cause file: #{file_name}"
+
+      f.puts "  it 'makes a change that will cause #{victim_idx + 1} to fail' do"
+      f.puts "    $fail = true"
+      f.puts "  end"
+    elsif i == victim_idx
+      victim_file = file_name
+      $log.info "writing victim file: #{file_name}"
+
+      f.puts "  it 'will fail if run after #{cause_idx + 1}' do"
+      f.puts "    raise if $fail"
+      f.puts "  end"
+    else
+      candidates << file_name
+      f.puts "  it 'passes' do"
+      f.puts "    expect(true).to eq(true)"
+      f.puts "  end"
+    end
+    f.puts "end"
+  end
+  suite_name = suite_name.succ
+end
+
+file_name = "#{options[:dir]}/spec_helper.rb"
+File.open(file_name, 'w')
+
+$log.info "wrote #{options[:count]} files to #{options[:dir]}"
+$log.info "cause: #{cause_file}"
+$log.info "victim: #{cause_file}"
+$log.info "rspec-file-bisect --target #{victim_file} --candidates='#{candidates.join(' ')}'"

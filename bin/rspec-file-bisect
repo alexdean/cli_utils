@@ -1,0 +1,135 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'open3'
+require 'logger'
+
+options = {
+  rspec: 'rspec'
+}
+
+opt_parse = OptionParser.new do |opts|
+  opts.banner = <<~EOF
+    Usage: rspec-file-bisect --rspec='bundle exec rspec' --candidates='spec/a_spec.rb spec/b_spec.rb' --victim='spec/c_spec.rb'
+  EOF
+
+  opts.on("-v", "--[no-]verbose", "Run verbosely") do |o|
+    options[:verbose] = o
+  end
+
+  opts.on("-h", "--help", "Print detailed usage info") do |o|
+    options[:help] = true
+  end
+
+  opts.on("-r", "--rspec PATH", "rspec command") do |o|
+    options[:rspec] = o
+  end
+
+  opts.on("-c", "--candidates FILE_LIST", "spec files to bisect on. expectation is one of these causes --victim to fail.") do |o|
+    options[:candidates] = o.to_s.strip.split(' ').compact
+  end
+
+  opts.on("-v", "--victim PATH", "spec file which has flakey behavior. expectation is that this failure is triggered by one of the --candidates.") do |o|
+    options[:victim] = o
+  end
+end
+
+opt_parse.parse!
+
+if options[:help]
+  puts <<~EOF
+    Goal of this script is to narrow down a flakey test run
+    to two test files (a cause and a victim). Manually debug
+    or use `rspec --bisect` to evaluate further.
+
+    `rspec --bisect` on its own is too slow with large numbers
+    of tests, so this script can be used to narrow down the
+    list of files to bisect on.
+
+  EOF
+  puts opt_parse
+  exit
+end
+
+if !options[:victim]
+  puts "--victim is required"
+  puts opt_parse
+  exit 1
+end
+
+if options[:candidates].size < 2
+  puts "--candidates must name at least 2 spec files"
+  exit 1
+end
+
+def run_rspec(candidates, victim, log, label)
+  log.info "#{label}: running rspec with candidates: #{candidates.inspect}"
+
+  file_list = candidates + [victim]
+  full_cmd = $rspec + file_list
+  log.debug "running: #{full_cmd.inspect}"
+  output, status = Open3.capture2e(*full_cmd)
+  log.debug output
+  status.success?
+end
+
+def split_list(files)
+  half = files.size / 2
+  [files[0..(half-1)], files[half..-1]]
+end
+
+# try victim with first half
+# try victim with 2nd half
+
+# def run_candidate_group(candidates, victim, label)
+#   next_label = label + '.0'
+#   result = run_rspec(candidates, victim, next_label)
+#   if !result
+#     return bisect(candidates, victim, next_label)
+#   end
+# end
+
+def bisect(files, victim, log, label = "")
+  if files.size < 2
+    return files
+  end
+
+  candidates = split_list(files)
+  log.debug "split #{files.inspect} into #{candidates.inspect}"
+
+  next_label = label + '.0'
+  result = run_rspec(candidates[0], victim, log, next_label)
+  if !result
+    log.info "#{next_label}: GOT FAILURES."
+    return bisect(candidates[0], victim, log, next_label)
+  else
+    log.info "#{next_label}: PASSED."
+    next_label = label + '.1'
+    result = run_rspec(candidates[1], victim, log, next_label)
+    if !result
+      log.info "#{next_label}: GOT FAILURES."
+      return bisect(candidates[1], victim, log, next_label)
+    else
+      log.info "#{label} both candidate groups passed."
+      nil
+    end
+  end
+end
+
+log = Logger.new(STDOUT)
+log.level = options[:verbose] ? Logger::DEBUG : Logger::INFO
+$rspec = options[:rspec].split(' ')
+victim = options[:victim]
+candidates = options[:candidates]
+
+if !run_rspec([], victim, log, '')
+  log.info "victim #{victim} failed when run on its own. bisect probably won't help."
+  exit
+end
+
+suspect = bisect(candidates, victim, log)
+if suspect
+  log.info "Minimal reproduce case: #{$rspec.join(' ')} #{suspect.join(' ')} #{victim}"
+else
+  log.error "No test failures. Can't determine a reproduce case."
+end
