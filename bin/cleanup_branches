@@ -8,7 +8,7 @@
 #
 #   1. the initial characters of a branch name
 #   2. the prefix of a ticket name which will appear in git logs
-prefix = ENV['PREFIX'] || 'IN,RRSU'
+prefix = ENV['PREFIX'] || 'IN,PMNTS,RRSU'
 
 # try to figure out which is the main/master branch.
 def guess_target_branch
