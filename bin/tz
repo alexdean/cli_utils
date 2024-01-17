@@ -1,8 +1,14 @@
 #!/usr/bin/env ruby
 
 require 'time'
-require 'tzinfo'
 require 'logger'
+
+begin
+  require 'tzinfo'
+rescue LoadError
+  puts "tzinfo gem is not installed. try running `gem install tzinfo` first."
+  exit 1
+end
 # require 'pry'
 
 # tz 15:00 UTC in EDT
@@ -21,11 +27,15 @@ usage = <<~EOF
 
   tz <time> <source_tz> in <destination_tz>
 
-## example
+## examples
+
+convert 15:00 UTC into US Eastern time:
 
   tz 15:00 UTC in ET
 
-this converts 15:00 UTC into US Eastern time.
+convert US Mountain time into UTC:
+
+  tz 00:00 America/Denver in UTC
 
 ## zones
 
@@ -33,6 +43,11 @@ Standard timezone identifiers like 'America/Chicago' or 'Europe/Berlin' are
 understood, as are the following shortcuts:
 
 #{id_map.map { |k, v| "  * #{k}: #{v}"}.join("\n") }
+
+## Daylight Savings
+
+We'll use whatever DST rules are in currently in effect. There is no current
+support for specifying which day to use when converting times.
 EOF
 
 if ARGV.size == 0
