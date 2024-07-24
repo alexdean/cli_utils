@@ -1,0 +1,28 @@
+#!/bin/zsh
+
+# Redirect output to stderr.
+exec 1>&2
+
+function check () {
+  target=$1
+  configName=$2
+
+  allowed=$(git config --bool hooks.$configName)
+  git diff --cached | grep -q -i $target
+  target_found=$?
+  if [[ "$allowed" != "true" && "$target_found" == "0" ]]; then
+    cat <<EOF
+Found "$target".
+
+Allow this via:
+
+  git config hooks.$configName true
+EOF
+    exit 1
+  fi
+}
+
+check 'binding.pry' 'allowpry'
+check 'focus:' 'allowfocus'
+# 'dont commit this'/'just for testing' flag
+check 'tktk' 'allowtktk'
