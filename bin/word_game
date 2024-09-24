@@ -1,0 +1,183 @@
+#!/usr/bin/env ruby
+
+require 'bundler/inline'
+
+gemfile do
+  source 'https://rubygems.org'
+  gem 'tty-cursor'
+  gem 'tty-reader'
+  gem 'open-uri'
+end
+
+require 'tty/cursor'
+require 'tty/reader'
+
+# how often to show a new letter. (in seconds.)
+reveal_every = 5
+
+@cursor = TTY::Cursor
+@reader = TTY::Reader.new
+# set true when ctrl-c is input
+@interrupted = false
+
+# TODO: accept word list as CLI option
+
+# word_file = "/usr/share/dict/web2"
+# # https://github.com/dwyl/english-words/blob/master/words_alpha.txt
+# word_file = "words_alpha.txt"
+# # https://www.sketchengine.eu/english-word-list/
+# word_file = "english-word-list-total.csv"
+# https://github.com/first20hours/google-10000-english/blob/master/google-10000-english-usa-no-swears-medium.txt
+word_file = "google-10000-english-usa-no-swears-medium.txt"
+
+if !File.exist?(word_file) || File.size(word_file) == 0
+  puts "word file not found. downloading..."
+  # download the file
+  require 'open-uri'
+  url = "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-usa-no-swears-medium.txt"
+  open(word_file, 'wb') do |file|
+    file.write(URI.open(url).read)
+  end
+  puts "download done."
+end
+
+# TODO: pick a word w/o reading the entire file
+word_list = File.read(word_file).split("\n").select { |word| word.length < 10 }
+
+# represent a word which is being guesses.
+# handles output of a masked version of the word like 'h_llo' for 'hello'.
+class Word
+  def initialize(word)
+    @word = word
+    @revealed_letter_indexes = []
+  end
+
+  def actual
+    @word
+  end
+
+  def to_s
+    out = ""
+    0.upto(@word.size-1) do |idx|
+      if @revealed_letter_indexes.include?(idx)
+        out << @word[idx]
+      else
+        out << "_"
+      end
+    end
+    out
+  end
+
+  def reveal_letter!
+    @revealed_letter_indexes << new_index_to_show(@word, @revealed_letter_indexes)
+  end
+
+  def reveal!
+    @revealed_letter_indexes = 0.upto(@word.length - 1).to_a
+  end
+
+  def revealed?
+    @revealed_letter_indexes.length == @word.length
+  end
+
+  private
+
+  # choose a new random letter to reveal
+  def new_index_to_show(word, revealed_letter_indexes)
+    word_indexes = (0..word.length - 1).to_a
+    unrevealed = word_indexes - revealed_letter_indexes
+    unrevealed.sample
+  end
+end
+
+@word = Word.new(word_list.sample)
+@guess_count = 1
+
+print @cursor.clear_screen
+print @cursor.move_to(1,1)               
+
+def print_status(until_next_reveal = nil)
+  print @cursor.save
+  print @cursor.move_to(1,1)                
+  print @word.to_s
+  if until_next_reveal
+    print "           " + until_next_reveal.round.to_s + "s"
+  end
+  print @cursor.clear_line_after
+  print @cursor.restore
+end
+
+print_status(reveal_every)
+puts
+
+# reveals a new letter periodically
+printer = Thread.new do
+            last_reveal_at = Time.at(0)
+
+            loop do
+              since_last_reveal = Time.now - last_reveal_at
+              # reveal a new random letter
+              if since_last_reveal > reveal_every
+                @word.reveal_letter!
+                last_reveal_at = Time.now
+                since_last_reveal = 0
+              else
+                sleep 0.25
+              end
+
+              until_next_reveal = reveal_every - since_last_reveal
+              print_status(until_next_reveal)
+            end
+          end
+
+# captures input from user
+input = Thread.new do
+          loop do
+            begin
+              @guess = @reader.read_line("#{@guess_count}> ")
+              @guess.strip!
+            rescue TTY::Reader::InputInterrupt
+              @interrupted = true
+              break
+            else
+              @guess_count += 1
+            end
+
+            if @guess == @word.actual
+              break
+            end
+          end
+        end
+
+# evaluates input (guesses & ctrl-c.)
+observer = Thread.new do
+             message = nil
+             loop do
+               if @guess == @word.actual
+                 message = "You win!"
+               elsif @word.revealed?
+                 message = "You lose."
+                 puts
+               elsif @interrupted
+                 @word.reveal!
+                 message = "Word was: '#{@word.to_s}'"
+                 puts
+               end
+
+               if message
+                 print @cursor.next_line
+                 puts message
+                 break
+               else
+                 sleep 0.1
+               end
+             end
+           end
+
+
+observer.join
+input.exit
+input.join
+# remove '%' output created when input thread is killed
+print @cursor.clear_line 
+printer.exit
