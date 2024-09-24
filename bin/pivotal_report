@@ -79,7 +79,7 @@ end
 # add a single story's data to the summary and totals hashes.
 def add_data_item(item, summary, totals, epics, max_name_length)
   label_names = item['labels'].map{ |i| i['name']}
-  skip = (label_names & %w[duplicate canceled cancelled]).size > 0
+  skip = (label_names & %w[duplicate canceled cancelled outdated]).size > 0
   return max_name_length if skip
 
   item['labels'].each do |label|
@@ -182,7 +182,11 @@ end
 # sort by is_epic, then by user-specified column.
 # print new header row after is_epic changes
 summary = summary
-  .sort_by { |id, item| "#{item['type']} #{item[options[:sort]].to_s}" }
+  .sort_by { |id, item|
+    sort_value = item[options[:sort]]
+    sort_value = sort_value.downcase if sort_value.is_a?(String)
+    [item['type'], sort_value]
+  }
   .to_h
 
 puts "#{begin_at.to_date} - #{end_at.to_date}"
