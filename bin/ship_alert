@@ -58,13 +58,13 @@ log = Logger.new($stdout)
 log.level = Logger::INFO
 
 log.info 'start'
-uri = URI('https://arielmobile.azurewebsites.net/v1.0/ships/index')
+uri = URI('https://arielmob.azurewebsites.net/v1.0/ships/index')
 origins = []
 
 def fetch_data(uri, log)
   log.debug 'updating data'
   req = Net::HTTP::Get.new(uri)
-  req['User-Agent'] = "ship_alert/1.0 (see https://github.com/alexdean/cli_utils/blob/master/bin/ship_alert)"
+  req['User-Agent'] = "ship_alert/1.0 (https://github.com/alexdean/cli_utils/blob/master/bin/ship_alert)"
   response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
     begin
       http.request(req)
