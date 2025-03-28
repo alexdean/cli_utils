@@ -1,0 +1,98 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'io/wait'
+require 'yaml'
+
+ALL = 0
+EXTRA = 1
+STANDARD = 2
+
+level = STANDARD
+config_file_path = File.expand_path('~/.backtrace-filter.yml')
+default_config = {
+  # line must match one of these to be included
+  'useful' => [
+    '/var/www'
+  ],
+  # stuff we'll normally exclude by default. use --extra or --all to include them.
+  'extra' => [
+    '/var/www/lib',
+    '/var/www/bin'
+  ]
+}
+
+option_parser = OptionParser.new do |parser|
+  parser.banner = <<~EOF
+    Tries to select backtrace lines from stdin, and filter out less-useful lines.
+
+    Example: pbpaste | #{__FILE__} [options]
+
+    ## Configuration
+
+    Customize configuration by copying the defaults into `#{config_file_path}` and editing as desired.
+
+      * 'useful' are backtrace lines that are worth reporting.
+      * 'extra' are backtrace lines that match 'useful', but are normally suppressed.
+
+    ## Default config (yaml)
+    #{YAML.dump(default_config).strip}
+
+  EOF
+
+  parser.on("-s", "--standard", "Report most useful lines. This is the default. Includes useful lines and omits extra lines.") do |v|
+    level = STANDARD
+  end
+
+  parser.on("-e", "--extra", "Report stuff we normally omit. Include useful and extra lines.") do |v|
+    level = EXTRA
+  end
+
+  parser.on("-a", "--all", "Report all lines that look like a backtrace (useful or not).") do |v|
+    level = ALL
+  end
+
+  parser.on("-c", "--config", String, "Path to a YML config file to use.") do |v|
+    config_file_path = v
+  end
+end
+option_parser.parse!
+
+if !File.exist?(config_file_path)
+  $stderr.puts "WARN: Config file #{config_file_path} does not exist. Using default values."
+else
+  begin
+    config = YAML.safe_load(File.read(config_file_path))
+  rescue => e
+
+  end
+end
+
+if !config
+  config = default_config
+end
+
+if !$stdin.ready?
+  # show the help info & exit.
+  $stderr.puts option_parser
+  exit
+end
+
+backtrace_regex = Regexp.new(/:\d+:in/)
+
+$stdin.read.split("\n").each do |line|
+  # not a stack trace line.
+  next if !line.match(backtrace_regex)
+
+  # only include lines that we've identified as useful.
+  # ie: exclude framework/gem code
+  is_useful = config['useful'].any? { |path_fragment| line.include?(path_fragment) }
+  next if !is_useful && level > ALL
+
+  # stuff we normally want to ignore
+  is_extra = config['extra'].any? { |path_fragment| line.include?(path_fragment) }
+  next if is_extra && level > EXTRA
+
+  # remove quotes & trailing commas
+  puts line.strip.gsub(/^"/, '').gsub(/",?/, '')
+end
