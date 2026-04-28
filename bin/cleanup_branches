@@ -8,7 +8,7 @@
 #
 #   1. the initial characters of a branch name
 #   2. the prefix of a ticket name which will appear in git logs
-prefix = ENV['PREFIX'] || 'GWS'
+prefix = ENV['PREFIX'] || 'GWS,EMBC,EMBPAY'
 
 # try to figure out which is the main/master branch.
 def guess_target_branch
@@ -23,12 +23,33 @@ def guess_target_branch
   .first
 end
 
+def worktree_for_branch(branch_name)
+  `git worktree list --porcelain`.split("\n\n").each do |entry|
+    lines = entry.strip.split("\n")
+    worktree_path = nil
+    branch_ref = nil
+    lines.each do |line|
+      worktree_path = line.sub(/^worktree /, '') if line.start_with?('worktree ')
+      branch_ref = line.sub(/^branch refs\/heads\//, '') if line.start_with?('branch ')
+    end
+    return worktree_path if branch_ref == branch_name
+  end
+  nil
+end
+
+def remove_worktree(worktree_path)
+  cmd = "git worktree remove #{worktree_path}"
+  puts "  > " + cmd
+  output = `#{cmd} 2>&1`.to_s.strip
+  puts "  " + output.split("\n").join("\n  ") unless output.empty?
+end
+
 def check_target(prefix:, target_branch:)
   puts
   puts "checking branches starting with '#{prefix}' against target branch '#{target_branch}'."
   puts "set PREFIX or TARGET to change these."
 
-  branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*'`.strip.split
+  branches = `git branch --list '#{prefix.upcase}*' --list '#{prefix.downcase}*' --format='%(refname:short)'`.strip.split("\n")
 
   if branches.size == 0
     puts "nothing to do for prefix:#{prefix}."
@@ -59,6 +80,12 @@ def check_target(prefix:, target_branch:)
       response = gets.to_s.strip
 
       if response[0].downcase == 'y'
+        worktree_path = worktree_for_branch(branch_name)
+        if worktree_path
+          puts
+          remove_worktree(worktree_path)
+        end
+
         cmd = "git branch -D #{branch_name}"
         puts
         puts "  > " + cmd
