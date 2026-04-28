@@ -11,7 +11,7 @@ if [ "$current_branch" != "main" ]; then
 fi
 
 git fetch --prune
-git rebase origin main --autostash
+git pull --autostash
 
 if [ "$?" = "0" ]; then
   test -e bin/setup
