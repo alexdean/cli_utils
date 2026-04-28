@@ -73,6 +73,10 @@ _, time_input, source_tz_input, dest_tz_input = input.match(/^(.+) ([\w\/]+) in 
 # debug: time_spec.inspect
 
 # TODO: support `tz now in TZ`
+if time_input == 'now'
+  time_input = Time.now.strftime('%H:%m')
+  puts time_input
+end
 
 begin
   if source_tz_input.to_s.size == 2
