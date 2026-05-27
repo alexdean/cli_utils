@@ -1,0 +1,194 @@
+#!/usr/bin/env ruby
+require 'optparse'
+
+# Edit this list to tune the cards.
+# - One term per line.
+# - Add: insert a new line like "My New Term",
+# - Remove: delete the line, or prefix with # to soft-disable.
+# - Need at least 24 active terms for a 5x5 card.
+TERMS = [
+  "4.0 GPA",
+  "Academic Letter",
+  "Alma Mater Sung",
+  "AP Scholar",
+  "Awkward Pause",
+  "Booster Club Mention",
+  "Cap & Gown Photo",
+  "\"Class of 2026\"",
+  "Class Rank Mentioned",
+  "Crying Senior",
+  "Future College Named",
+  "Future Plans Slide",
+  "Honor Roll",
+  "\"I'd Like to Thank...\"",
+  "Inspirational Quote",
+  "\"Check if the diploma is signed/real.\"",
+  "Joke about library fines/returns",
+  "Long-Winded Speech",
+  "Microphone Feedback",
+  "National Honor Society",
+  "Perfect Attendance",
+  "Phone Goes Off",
+  "Plaque vs. Trophy Mix-Up",
+  "Principal's Speech",
+  "Reference to inside joke nobody gets",
+  "Scholarship Announced",
+  "Slideshow Glitch",
+  "\"So... yeah.\"",
+  "Speaker Forgets a Name",
+  "Standing Ovation",
+  "Student of the Month",
+  "\"Superstar\"",
+  "Teacher of the Year",
+  "Tearful Parent",
+  "Valedictorian",
+  "Yearbook Quote Read",
+].freeze
+
+options = { count: 2, out: 'bingo_cards.html', seed: nil }
+
+OptionParser.new do |o|
+  o.banner = "Usage: bin/banquet_bingo [options]"
+  o.on('-n', '--count N', Integer, 'Number of cards (default 2)') { |v| options[:count] = v }
+  o.on('-o', '--out PATH', String, 'Output HTML path (default bingo_cards.html)') { |v| options[:out] = v }
+  o.on('-s', '--seed N', Integer, 'Random seed for reproducible output') { |v| options[:seed] = v }
+  o.on('-h', '--help', 'Show this help') { puts o; exit }
+end.parse!(ARGV)
+
+if TERMS.size < 24
+  abort "Need at least 24 terms; got #{TERMS.size}. Add more entries to TERMS."
+end
+
+if options[:count] < 1
+  abort "--count must be >= 1"
+end
+
+rng = options[:seed] ? Random.new(options[:seed]) : Random.new
+
+def generate_card(rng)
+  picks = TERMS.sample(24, random: rng)
+  grid = Array.new(5) { Array.new(5) }
+  idx = 0
+  (0..4).each do |row|
+    (0..4).each do |col|
+      if row == 2 && col == 2
+        grid[row][col] = "FREE"
+      else
+        grid[row][col] = picks[idx]
+        idx += 1
+      end
+    end
+  end
+  grid
+end
+
+def html_escape(str)
+  str.to_s
+     .gsub('&', '&amp;')
+     .gsub('<', '&lt;')
+     .gsub('>', '&gt;')
+     .gsub('"', '&quot;')
+     .gsub("'", '&#39;')
+end
+
+def render_card(grid, number)
+  rows = grid.map do |row|
+    cells = row.map do |cell|
+      free = cell == "FREE" ? ' class="free"' : ''
+      %(      <div class="cell"#{free}>#{html_escape(cell)}</div>)
+    end.join("\n")
+    cells
+  end.join("\n")
+
+  <<~HTML
+    <section class="card">
+      <h2>Awards Banquet Bingo &mdash; Card #{number}</h2>
+      <div class="grid header">
+        <div class="cell head">B</div>
+        <div class="cell head">I</div>
+        <div class="cell head">N</div>
+        <div class="cell head">G</div>
+        <div class="cell head">O</div>
+      </div>
+      <div class="grid body">
+    #{rows}
+      </div>
+    </section>
+  HTML
+end
+
+def render_html(cards)
+  sections = cards.each_with_index.map { |grid, i| render_card(grid, i + 1) }.join("\n")
+
+  <<~HTML
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Awards Banquet Bingo</title>
+      <style>
+        @page { size: letter; margin: 0.5in; }
+        body {
+          font-family: Georgia, "Times New Roman", serif;
+          margin: 0;
+          padding: 0.5in;
+          color: #000;
+          background: #fff;
+        }
+        .card {
+          page-break-after: always;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .card:last-child { page-break-after: auto; }
+        h2 {
+          font-size: 22pt;
+          margin: 0 0 0.2in 0;
+          text-align: center;
+          letter-spacing: 0.05em;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(5, 1.4in);
+          width: 7in;
+        }
+        .grid.header { margin-bottom: 0; }
+        .grid.body .cell { height: 1.4in; }
+        .grid.header .cell { height: 0.8in; }
+        .cell {
+          border: 2px solid #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 0.1in;
+          box-sizing: border-box;
+          font-size: 12pt;
+          line-height: 1.2;
+          word-break: break-word;
+        }
+        .grid.body .cell { border-top: none; }
+        .grid.body .cell:nth-child(-n+5) { border-top: 2px solid #000; }
+        .cell.head {
+          font-size: 36pt;
+          font-weight: bold;
+          letter-spacing: 0.05em;
+        }
+        .cell.free {
+          font-weight: bold;
+          font-size: 18pt;
+          letter-spacing: 0.05em;
+        }
+      </style>
+    </head>
+    <body>
+    #{sections}
+    </body>
+    </html>
+  HTML
+end
+
+cards = Array.new(options[:count]) { generate_card(rng) }
+File.write(options[:out], render_html(cards))
+puts "Wrote #{options[:count]} card#{options[:count] == 1 ? '' : 's'} to #{options[:out]}"
